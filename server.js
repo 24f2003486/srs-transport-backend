@@ -43,6 +43,9 @@ function validateData(data) {
 
   return null;
 }
+app.get("/", (req, res) => {
+  res.send("SRS Transport Backend is Running");
+});
 
 /* ROUTE: SEND QUOTE*/
 
