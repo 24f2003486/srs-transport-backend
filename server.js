@@ -1,30 +1,20 @@
 require("dotenv").config();
 
 const express = require("express");
-const nodemailer = require("nodemailer");
 const cors = require("cors");
+const { Resend } = require("resend");
 
 const app = express();
-
-/* MIDDLEWARE */
 
 app.use(cors());
 app.use(express.json());
 
-/* EMAIL TRANSPORTER */
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
-
-/* VALIDATION FUNCTION*/
+/* VALIDATION FUNCTION */
 
 function validateData(data) {
-  const { name, email, phone, service, pickup, drop } = data;
+  const { name, email, phone } = data;
 
   if (!name || name.length < 3) {
     return "Invalid name";
@@ -40,17 +30,18 @@ function validateData(data) {
     return "Invalid phone number";
   }
 
-
   return null;
 }
+
+/* HEALTH CHECK */
+
 app.get("/", (req, res) => {
-  res.send("SRS Transport Backend is Running");
+  res.send("SRS Transport Backend Running 🚛");
 });
 
-/* ROUTE: SEND QUOTE*/
+/* SEND QUOTE */
 
 app.post("/send-quote", async (req, res) => {
-
   try {
     const error = validateData(req.body);
 
@@ -60,11 +51,11 @@ app.post("/send-quote", async (req, res) => {
 
     const { name, email, phone, service, pickup, drop } = req.body;
 
-    /* -------- Email to Owner -------- */
+    /* Email to Owner */
 
-    const ownerMailOptions = {
-      from: process.env.EMAIL_USER,
-      to: process.env.EMAIL_USER, // Owner receives
+    await resend.emails.send({
+      from: "SRS Transport <onboarding@resend.dev>",
+      to: process.env.EMAIL_USER,
       subject: "New Quote Request - SRS Transport",
       html: `
         <h2>New Transport Quote Request</h2>
@@ -74,38 +65,31 @@ app.post("/send-quote", async (req, res) => {
         <p><strong>Service:</strong> ${service}</p>
         <p><strong>Pickup:</strong> ${pickup}</p>
         <p><strong>Drop:</strong> ${drop}</p>
-        <hr/>
-        <p>This message was sent from SRS Transport website.</p>
-      `,
-    };
+      `
+    });
 
-    await transporter.sendMail(ownerMailOptions);
+    /* Confirmation to Customer */
 
-
-    const customerMailOptions = {
-      from: process.env.EMAIL_USER,
+    await resend.emails.send({
+      from: "SRS Transport <onboarding@resend.dev>",
       to: email,
-      subject: "We Received Your Quote Request - SRS Transport",
+      subject: "We Received Your Quote Request",
       html: `
         <h2>Thank You ${name}!</h2>
         <p>We have received your transport quote request.</p>
         <p>Our team will contact you shortly.</p>
         <br/>
-        <p><strong>SRS Transport</strong></p>
-      `,
-    };
-
-    await transporter.sendMail(customerMailOptions);
+        <strong>SRS Transport</strong>
+      `
+    });
 
     res.status(200).json({ message: "Quote request sent successfully" });
 
   } catch (error) {
-    console.error("Error sending email:", error);
+    console.error("Email Error:", error);
     res.status(500).json({ message: "Internal server error" });
   }
 });
-
-/* START SERVER*/
 
 const PORT = process.env.PORT || 5000;
 
